@@ -19,30 +19,24 @@ DATA_PATH = "data"
 
 def downsampleTo16K():
     targetSampleRate = 16000
-    # Traverse through all subfolders
     for root, dirs, files in os.walk(DATA_PATH):
         for file in files:
-            # Check if the file is a WAV file
             if file.endswith(".wav"):
-                # Construct the file path
                 wav_file = os.path.join(root, file)
-
-                # Read the original WAV file
                 data, sample_rate = sf.read(wav_file)
-
-                # Downsample the audio data
+                if sample_rate == targetSampleRate:
+                    continue
                 resampled_data = resample(data, int(len(data) * targetSampleRate / sample_rate))
-
-                # Overwrite the original file with the downsampled data
                 sf.write(wav_file, resampled_data, targetSampleRate, 'PCM_16')
-
                 print(f"Downsampled {wav_file} to {targetSampleRate} Hz")
 
 def dataInfo():
     subdirectories = []
     bitrates = []
     lengths = []
+    longest = []
     for dirpath, dirnames, filenames in os.walk(DATA_PATH):
+        longest_length = 0
         for filename in filenames:
             if filename.endswith('.wav'):
                 file_path = os.path.join(dirpath, filename)
@@ -56,6 +50,10 @@ def dataInfo():
                     subdirectories.append(dirpath)
                     bitrates.append(bitrate)
                     lengths.append(duration)
+                    if longest_length < duration:
+                        longest_length = duration
+        if longest_length != 0:
+            longest.append(longest_length)
 
     data = {
     'Subdirectory': subdirectories,
@@ -64,6 +62,7 @@ def dataInfo():
     }
     df = pd.DataFrame(data)
     grouped_df = df.groupby('Subdirectory').mean()
+    grouped_df["longest"] = longest
     print(grouped_df)
 
 def readDataLabels(address):
