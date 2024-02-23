@@ -1,5 +1,6 @@
 from tensorflow.python.keras import layers
 from tensorflow.python.keras import models
+import keras
 import pathlib
 import preProcessing
 import tensorflow as tf
@@ -23,7 +24,6 @@ def main():
             print("directory does not exist!")
     
     preProcessing.convert_mp3_to_wav(SORTED_DATA_PATH)
-    dataLabels = preProcessing.readDataLabels(DATA_LABELS_PATH)
     preProcessing.downsampleTo16K()
     preProcessing.dataInfo()
     train_ds, val_ds = tf.keras.utils.audio_dataset_from_directory(
@@ -33,6 +33,7 @@ def main():
     seed=0,
     output_sequence_length=16000*6,
     subset='both')
+    dataLabels = np.array(train_ds.class_names)
     print(train_ds.element_spec)
     train_ds = train_ds.map(preProcessing.squeeze, tf.data.AUTOTUNE)
     val_ds = val_ds.map(preProcessing.squeeze, tf.data.AUTOTUNE)
@@ -114,28 +115,66 @@ def main():
     num_labels = len(dataLabels)
 
     # Instantiate the `tf.keras.layers.Normalization` layer.
-    norm_layer = tf.keras.layers.Normalization()
+    norm_layer = keras.layers.Normalization()
     # Fit the state of the layer to the spectrograms
     # with `Normalization.adapt`.
     norm_layer.adapt(data=train_spectrogram_ds.map(map_func=lambda spec, label: spec))
 
-    model = models.Sequential([
-        layers.Input(shape=input_shape),
+    model = keras.models.Sequential([
+        keras.layers.Input(shape=input_shape),
         # Downsample the input.
-        tf.keras.layers.Resizing(32, 32),
+        keras.layers.Resizing(64, 64),
         # Normalize.
         norm_layer,
-        layers.Conv2D(32, 3, activation='relu'),
-        layers.Conv2D(64, 3, activation='relu'),
-        layers.MaxPooling2D(),
-        layers.Dropout(0.25),
-        layers.Flatten(),
-        layers.Dense(64, activation='relu'),
-        layers.Dropout(0.5),
-        layers.Dense(num_labels),
+        keras.layers.Conv2D(64, 4, activation='tanh'),
+        keras.layers.Conv2D(32, 4, activation='tanh'),
+        keras.layers.MaxPooling2D(),
+        keras.layers.Flatten(),
+        keras.layers.Dense(16, activation='tanh'),
+        keras.layers.Dropout(0.6),
+        keras.layers.Dense(num_labels,activation = 'softmax'),
     ])
 
     print(model.summary())
+    
+    #adam optimizer
+    model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+    metrics=['accuracy'],
+)
+    EPOCHS = 20
+    history = model.fit(
+        train_spectrogram_ds,
+        validation_data=val_spectrogram_ds,
+        epochs=EPOCHS,
+        callbacks=tf.keras.callbacks.EarlyStopping(verbose=1, patience=2),
+    )
+
+    #plot the results
+    metrics = history.history
+    plt.figure(figsize=(16,6))
+    plt.subplot(1,2,1)
+    plt.plot(history.epoch, metrics['loss'], metrics['val_loss'])
+    plt.legend(['loss', 'val_loss'])
+    plt.ylim([0, max(plt.ylim())])
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss [CrossEntropy]')
+    plt.tight_layout()
+    plt.savefig('Loss.png')
+
+    plt.subplot(1,2,2)
+    plt.plot(history.epoch, 100*np.array(metrics['accuracy']), 100*np.array(metrics['val_accuracy']))
+    plt.legend(['accuracy', 'val_accuracy'])
+    plt.ylim([0, 100])
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy [%]')
+    plt.tight_layout()
+    plt.savefig('Accuracy.png')
+
+    #print model eval
+    print(model.evaluate(test_spectrogram_ds, return_dict=True))
+    model.save("savedModel", save_format="tf")
 
 if __name__ == "__main__":
     main()

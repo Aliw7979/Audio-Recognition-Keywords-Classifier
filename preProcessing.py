@@ -15,6 +15,22 @@ from scipy.signal import resample
 import soundfile as sf
 DATA_PATH = "data"
 
+def renameDirs():
+       
+    path = DATA_PATH 
+    folder_names = readDataLabels("dataLabels.json")
+    folders = sorted(os.listdir(path), key= int)
+    for i, folder in enumerate(folders):
+        print(i)
+        print(f"folder name : {folder}")
+        old_folder_path = os.path.join(path, folder)
+        new_folder_name = folder_names[i]
+        new_folder_path = os.path.join(path, new_folder_name)
+
+        os.rename(old_folder_path, new_folder_path)
+
+    print("Folders have been renamed.")
+
 def downsampleTo16K():
     targetSampleRate = 16000
     for root, dirs, files in os.walk(DATA_PATH):
@@ -68,7 +84,8 @@ def readDataLabels(address):
         json_data = json.load(file)
         print(json_data)
         file.close
-        return np.array(json_data)
+        data = np.array(json_data)
+        return data
 
 def sortDirectories(address):
     data_dir = pathlib.Path(address)
@@ -118,7 +135,7 @@ def convert_mp3_to_wav(directory, output_directory=None):
 
 def getSpectrogram(waveform):
   spectrogram = tf.signal.stft(
-      waveform, frame_length=255, frame_step=128)
+      waveform, frame_length=512, frame_step=256)
   spectrogram = tf.abs(spectrogram)
   spectrogram = spectrogram[..., tf.newaxis]
   return spectrogram
@@ -138,3 +155,4 @@ def makeSpecDs(ds):
   return ds.map(
       map_func=lambda audio,label: (getSpectrogram(audio), label),
       num_parallel_calls=tf.data.AUTOTUNE)
+
