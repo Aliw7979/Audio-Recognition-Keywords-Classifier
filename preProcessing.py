@@ -9,11 +9,60 @@ import json
 import numpy as np
 import pandas as pd
 import wave
-import subprocess
+import librosa
+import IPython as ipd
 from scipy.io import wavfile
 from scipy.signal import resample
 import soundfile as sf
+import tensorflow_io as tfio
 DATA_PATH = "data"
+
+def timeStretching():
+    for root, dirs, files in os.walk(DATA_PATH):
+        for file in files:
+            if file.startswith(('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')):
+                wav = os.path.join(root, file)
+                data, sample_rate = sf.read(wav)
+                factor = 0.8
+                wav_time_stch = librosa.effects.time_stretch(data,rate = factor)
+                out = os.path.join(root, 'time_stretching'+ file)
+                print(f'Time stretching of the {wav}')
+                sf.write(out, wav_time_stch, sample_rate)
+
+
+def lowPitchShifting():
+    for root, dirs, files in os.walk(DATA_PATH):
+        for file in files:
+            if file.startswith(('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')):
+                wav = os.path.join(root, file)
+                data, sample_rate = sf.read(wav)
+                wav_pitch_sf = librosa.effects.pitch_shift(data,sr = sample_rate,n_steps=-2)
+                out = os.path.join(root, 'low_pitch_shift'+ file)
+                print(f'change pitch the wave {wav}')
+                sf.write(out, wav_pitch_sf, sample_rate)
+
+def highPitchShifting():
+    for root, dirs, files in os.walk(DATA_PATH):
+        for file in files:
+            if file.startswith(('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')):
+                wav = os.path.join(root, file)
+                data, sample_rate = sf.read(wav)
+                wav_pitch_sf = librosa.effects.pitch_shift(data,sr = sample_rate,n_steps=2)
+                out = os.path.join(root, 'high_pitch_shift'+ file)
+                print(f'change pitch the wave {wav}')
+                sf.write(out, wav_pitch_sf, sample_rate)
+
+
+def timeShifting():
+    for root, dirs, files in os.walk(DATA_PATH):
+        for file in files:
+            if file.startswith(('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')):
+                wav = os.path.join(root, file)
+                data, sample_rate = sf.read(wav)
+                wav_roll = np.roll(data,int(sample_rate/10))
+                out = os.path.join(root, 'time_shift'+ file)
+                print(f'Shfiting {wav} by Times {sample_rate/10}')
+                sf.write(out, wav_roll, sample_rate)
 
 def renameDirs():
        
@@ -26,7 +75,6 @@ def renameDirs():
         old_folder_path = os.path.join(path, folder)
         new_folder_name = folder_names[i]
         new_folder_path = os.path.join(path, new_folder_name)
-
         os.rename(old_folder_path, new_folder_path)
 
     print("Folders have been renamed.")
@@ -127,18 +175,18 @@ def convert_mp3_to_wav(directory, output_directory=None):
         try:
             sound = AudioSegment.from_mp3(mp3_file)
 
-            sound.export(wav_path, format="wav", codec="pcm_s16le")
+            sound.export(wav_path, format="wav")
             os.remove(mp3_file)
             print(f"Converted '{mp3_file}' to '{wav_path}' successfully!")
         except Exception as e:
             print(f"Error converting '{mp3_file}': {e}")
 
-def getSpectrogram(waveform):
-  spectrogram = tf.signal.stft(
-      waveform, frame_length=512, frame_step=256)
-  spectrogram = tf.abs(spectrogram)
-  spectrogram = spectrogram[..., tf.newaxis]
-  return spectrogram
+def getSpectrogram(waveform,nfft=216,window=512,stride = 256):
+    spectrogram = tfio.audio.spectrogram(
+    waveform, nfft=nfft, window=window, stride=stride)
+    spectrogram = tf.abs(spectrogram)
+    spectrogram = spectrogram[..., tf.newaxis]
+    return spectrogram
 
 def plotSpectrogram(spectrogram, ax):
   if len(spectrogram.shape) > 2:
@@ -151,8 +199,17 @@ def plotSpectrogram(spectrogram, ax):
   Y = range(height)
   ax.pcolormesh(X, Y, log_spec)
 
-def makeSpecDs(ds):
-  return ds.map(
-      map_func=lambda audio,label: (getSpectrogram(audio), label),
-      num_parallel_calls=tf.data.AUTOTUNE)
-
+def makeSpecDs(ds,train=False):
+  if train == False:
+    return ds.map(
+        map_func=lambda audio,label: (getSpectrogram(audio), label),
+        num_parallel_calls=tf.data.AUTOTUNE)
+  else:
+      temp = ds.map(
+        map_func=lambda audio,label: (getSpectrogram(audio), label),
+        num_parallel_calls=tf.data.AUTOTUNE)
+      for i in range(20):
+            temp = tf.data.Dataset.concatenate(temp, ds.map(
+            map_func=lambda audio,label: (getSpectrogram(audio,128+(i*32),128+(i*32),64+(i*32)), label),
+            num_parallel_calls=tf.data.AUTOTUNE))
+      return temp
