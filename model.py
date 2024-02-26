@@ -1,5 +1,3 @@
-from tensorflow.python.keras import layers
-from tensorflow.python.keras import models
 import keras
 import pathlib
 import preProcessing
@@ -28,10 +26,10 @@ def main():
     preProcessing.dataInfo()
     train_ds, val_ds = tf.keras.utils.audio_dataset_from_directory(
     directory=data_dir,
-    batch_size=64,
-    validation_split=0.2,
-    seed=0,
-    output_sequence_length=16000*6,
+    batch_size=16,
+    validation_split=0.15,
+    seed=32,
+    output_sequence_length=16000*4,
     subset='both')
     dataLabels = np.array(train_ds.class_names)
     print(train_ds.element_spec)
@@ -73,7 +71,7 @@ def main():
     timescale = np.arange(waveform.shape[0])
     axes[0].plot(timescale, waveform.numpy())
     axes[0].set_title('Waveform')
-    axes[0].set_xlim([0, 96000])
+    axes[0].set_xlim([0, 16000*4])
 
     preProcessing.plotSpectrogram(spectrogram.numpy(), axes[1])
     axes[1].set_title('Spectrogram')
@@ -82,9 +80,10 @@ def main():
     plt.savefig('spectrogramsExamples.png')
     
     #create spectrogram datasets from the audio datasets
-    train_spectrogram_ds = preProcessing.makeSpecDs(train_ds)
-    val_spectrogram_ds = preProcessing.makeSpecDs(val_ds)
-    test_spectrogram_ds = preProcessing.makeSpecDs(test_ds)
+    train_spectrogram_ds = preProcessing.makeSpecDs(train_ds,False)
+    val_spectrogram_ds = preProcessing.makeSpecDs(val_ds,False)
+    test_spectrogram_ds = preProcessing.makeSpecDs(test_ds,False)
+    print(f"%%%%%%%%%%%%%%%%%%%%type of train :{train_spectrogram_ds}")
 
     #Examine spectrograms 
     for example_spectrograms, example_spect_labels in train_spectrogram_ds.take(1):
@@ -109,6 +108,7 @@ def main():
     train_spectrogram_ds = train_spectrogram_ds.cache().shuffle(10000).prefetch(tf.data.AUTOTUNE)
     val_spectrogram_ds = val_spectrogram_ds.cache().prefetch(tf.data.AUTOTUNE)
     test_spectrogram_ds = test_spectrogram_ds.cache().prefetch(tf.data.AUTOTUNE)
+    print(f"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&{test_spectrogram_ds}")
     #build
     input_shape = example_spectrograms.shape[1:]
     print('Input shape:', input_shape)
@@ -126,24 +126,23 @@ def main():
         keras.layers.Resizing(64, 64),
         # Normalize.
         norm_layer,
-        keras.layers.Conv2D(64, 4, activation='tanh'),
-        keras.layers.Conv2D(32, 4, activation='tanh'),
+        keras.layers.Conv2D(32, 3, activation='relu'),
+        keras.layers.Conv2D(16, 3, activation='relu'),
         keras.layers.MaxPooling2D(),
         keras.layers.Flatten(),
-        keras.layers.Dense(16, activation='tanh'),
-        keras.layers.Dropout(0.6),
+        keras.layers.Dense(64, activation='relu'),
+        keras.layers.Dropout(0.5),
         keras.layers.Dense(num_labels,activation = 'softmax'),
     ])
-
-    print(model.summary())
     
     #adam optimizer
     model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
     loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-    metrics=['accuracy'],
+    metrics=['accuracy',],
 )
-    EPOCHS = 20
+    print(model.summary())
+    EPOCHS = 15
     history = model.fit(
         train_spectrogram_ds,
         validation_data=val_spectrogram_ds,
