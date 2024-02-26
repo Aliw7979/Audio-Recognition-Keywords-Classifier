@@ -26,7 +26,7 @@ In this project, I employed wav to spectrograms to extract features from spectro
 ## Model Shape
 Following the splitting of the dataset into training and testing sets, I proceed to standardize them and used this structure for model :
 
-- The Resizing layer resizes the input spectrograms to a target size of 70x64 pixels.
+- The Resizing layer resizes the input spectrograms to a target size of 64x64 pixels.
 - The Normalization layer normalizes the input spectrograms.
 - Two Conv2D layers with 32 and 16 filters, respectively, apply convolutional operations to extract features from the input data. The activation function used is ReLU.
 - The MaxPooling2D layer performs down-sampling, reducing the spatial dimensions of the feature maps while preserving important information.
